@@ -175,4 +175,15 @@ export default class MatchEnum {
             });
         });
     }
+
+    placementType() {
+        this.json?.news?.placements?.forEach((placement, i) => {
+            const jsonValue = placement?.placement;
+            const protoValue = this.proto?.news?.placements?.[i]?.placement;
+            const protoEnumIndex = WK2.PlacementType[protoValue];
+            if (jsonValue !== protoValue) {
+                $notification.post("PlacementType", "", `json[${i}]: ${jsonValue}\nproto: ${protoEnumIndex}-${protoValue}`);
+            }
+        });
+    }
 }

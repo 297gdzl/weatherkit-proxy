@@ -149,6 +149,14 @@ Console.info(`FORMAT: ${FORMAT}`);
                                                 if (body?.forecastNextHour?.metadata?.providerName && !body?.forecastNextHour?.metadata?.providerLogo) body.forecastNextHour.metadata.providerLogo = providerNameToLogo(body?.forecastNextHour?.metadata?.providerName, "v2");
                                                 break;
                                             }
+                                            case "news": {
+                                                if (Settings?.LogLevel === "DEBUG" || Settings?.LogLevel === "ALL") {
+                                                    matchEnum.placementType();
+                                                }
+                                                if (body?.news?.metadata?.providerName && !body?.news?.metadata?.providerLogo) body.news.metadata.providerLogo = providerNameToLogo(body?.news?.metadata?.providerName, "v2");
+                                                Console.debug(`body.news: ${JSON.stringify(body?.news, null, 2)}`);
+                                                break;
+                                            }
                                             case "weatherAlerts": {
                                                 if (Settings?.LogLevel === "DEBUG" || Settings?.LogLevel === "ALL") {
                                                     matchEnum.severity();
