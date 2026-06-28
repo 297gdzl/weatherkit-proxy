@@ -1,5 +1,6 @@
 import AirQuality from "../class/AirQuality.mjs";
 import { Console, fetch, time } from "../utils/index.mjs";
+import locationsGrid from "../utils/qweather-china-city-list-grid.mjs";
 import ForecastNextHour from "./ForecastNextHour.mjs";
 import Weather from "./Weather.mjs";
 
@@ -19,6 +20,7 @@ export default class QWeather {
 
     #cache = {
         airQualityCurrent: {},
+        historicalAir: null,
     };
 
     #Config = {
@@ -49,41 +51,12 @@ export default class QWeather {
         },
     };
 
-    static async GetLocationsGrid(qweatherCache, setCache) {
-        Console.info("☑️ GetLocationsGrid");
-        const locationsGrid = qweatherCache?.locationsGrid;
-        // cache within 30 days
-        if (locationsGrid?.lastUpdated && locationsGrid.lastUpdated + 30 * 24 * 60 * 60 * 1000 > Date.now()) {
-            Console.info("✅ GetLocationsGrid", "Cache found!");
-            return locationsGrid.data;
-        } else {
-            Console.info("⚠️ GetLocationsGrid", "Cache not found or stale, fetching...");
-            const response = await fetch({
-                headers: locationsGrid?.etag ? { "If-None-Match": locationsGrid?.etag } : undefined,
-                url: "https://raw.githubusercontent.com/NSRingo/QWeather-Location-Grid/refs/heads/main/data/qweather-china-city-list-grid.json",
-            });
-
-            if (response.status === 304) {
-                Console.info("✅ GetLocationsGrid", "Cache not modified");
-                setCache({ ...qweatherCache, locationsGrid: { ...locationsGrid, lastUpdated: Date.now() } });
-                return locationsGrid.data;
-            }
-
-            const newLocationsGrid = JSON.parse(response.body);
-            setCache({
-                ...qweatherCache,
-                locationsGrid: { etag: response.headers.ETag, lastUpdated: Date.now(), data: newLocationsGrid },
-            });
-            Console.info("✅ GetLocationsGrid");
-            return newLocationsGrid;
-        }
-    }
-
     // Codes by Claude AI
-    static GetLocationInfo(locationsGrid, latitude, longitude) {
+    static GetLocationInfo(providedGrid, latitude, longitude) {
         Console.info("☑️ GetLocationInfo");
 
-        const { gridSize, grid } = locationsGrid;
+        const targetGrid = providedGrid || locationsGrid;
+        const { gridSize, grid } = targetGrid;
 
         // Haversine距离计算
         const distance = (lat1, lng1, lat2, lng2) => {
@@ -225,62 +198,6 @@ export default class QWeather {
         return currentWeather;
     }
 
-    async AirNow() {
-        Console.info("☑️ AirNow");
-        const request = {
-            url: `${this.endpoint}/v7/air/now?location=${this.longitude},${this.latitude}`,
-            headers: this.headers,
-        };
-        let airQuality;
-        try {
-            const body = await fetch(request).then(response => JSON.parse(response?.body ?? "{}"));
-            switch (body?.code) {
-                case "200": {
-                    const timeStamp = (Date.now() / 1000) | 0;
-                    airQuality = {
-                        metadata: {
-                            attributionUrl: body?.fxLink,
-                            expireTime: timeStamp + 60 * 60,
-                            language: "zh-CN", // `${this.language}-${this.country}`,
-                            latitude: this.latitude,
-                            longitude: this.longitude,
-
-                            providerName: "和风天气",
-                            readTime: timeStamp,
-                            reportedTime: (new Date(body?.now?.pubTime).getTime() / 1000) | 0,
-                            temporarilyUnavailable: false,
-                            sourceType: "STATION",
-                        },
-                        categoryIndex: Number.parseInt(body?.now?.level, 10),
-                        index: Number.parseInt(body?.now?.aqi, 10),
-                        isSignificant: false,
-                        pollutants: this.#CreatePollutantsV7(body?.now),
-                        previousDayComparison: AirQuality.Config.CompareCategoryIndexes.UNKNOWN,
-                        primaryPollutant: this.#Config.Pollutants[body?.now?.primary] || "NOT_AVAILABLE",
-                        scale: "HJ6332012",
-                    };
-                    if (body?.refer?.sources?.[0]) airQuality.metadata.providerName += `\n数据源: ${body?.refer?.sources?.[0]}`;
-                    break;
-                }
-                case "204":
-                case "400":
-                case "401":
-                case "402":
-                case "403":
-                case "404":
-                case "429":
-                case "500":
-                case undefined:
-                    throw Error(body?.code);
-            }
-        } catch (error) {
-            Console.error(`AirNow: ${error}`);
-        } finally {
-            //Console.debug(`airQuality: ${JSON.stringify(airQuality, null, 2)}`);
-            Console.info("✅ AirNow");
-        }
-        return airQuality;
-    }
 
     async #AirQualityCurrent() {
         Console.info("☑️ AirQualityCurrent");
@@ -688,19 +605,20 @@ export default class QWeather {
             .filter(pollutant => pollutant.concentration.unit !== "ppmC")
             .map(({ code, concentration, subIndexes = [] }) => {
                 const { value, unit } = concentration;
+                const normalizedUnit = unit.replace("³", "3");
                 const pollutantType = this.#Config.Pollutants[code];
                 const indexObj = subIndexes.find(subIndex => subIndex.code === scaleCode);
                 if (scaleCode && !indexObj) Console.warn("CreatePollutants", `No index for ${pollutantType} was found for required scale`);
 
                 const friendlyUnits = AirQuality.Config.Units.Friendly;
                 const { ugm3, mgm3, ppb, ppm } = AirQuality.Config.Units.WeatherKit;
-                switch (unit) {
+                switch (normalizedUnit) {
                     case friendlyUnits.MILLIGRAMS_PER_CUBIC_METER:
                         return { pollutantType, amount: AirQuality.ConvertUnit(value, mgm3, ugm3), units: ugm3, index: scaleCode ? (indexObj?.aqi ?? -1) : undefined };
                     case friendlyUnits.PARTS_PER_MILLION:
                         return { pollutantType, amount: AirQuality.ConvertUnit(value, ppm, ppb), units: ppb, index: scaleCode ? (indexObj?.aqi ?? -1) : undefined };
                     default:
-                        return { pollutantType, amount: value, units: this.#Config.Units[unit], index: scaleCode ? (indexObj?.aqi ?? -1) : undefined };
+                        return { pollutantType, amount: value, units: this.#Config.Units[normalizedUnit], index: scaleCode ? (indexObj?.aqi ?? -1) : undefined };
                 }
             });
 
@@ -873,6 +791,18 @@ export default class QWeather {
         return airQuality;
     }
 
+    async prefetchYesterdayAirQuality(locationInfo) {
+        Console.info("☑️ prefetchYesterdayAirQuality");
+        if (locationInfo && locationInfo.id && locationInfo.id.length === 9) {
+            this.#cache.historicalAir = this.#HistoricalAir(locationInfo.id);
+            const result = await this.#cache.historicalAir;
+            Console.info("✅ prefetchYesterdayAirQuality");
+            return result;
+        }
+        Console.warn("prefetchYesterdayAirQuality", "Invalid locationInfo");
+        return null;
+    }
+
     async YesterdayAirQuality(locationInfo) {
         Console.info("☑️ YesterdayAirQuality", `locationInfo ${JSON.stringify(locationInfo)}`);
         const failedAirQuality = {
@@ -893,7 +823,7 @@ export default class QWeather {
             return failedAirQuality;
         }
 
-        const historicalAir = await this.#HistoricalAir(locationInfo.id);
+        const historicalAir = await (this.#cache.historicalAir ?? this.#HistoricalAir(locationInfo.id));
         if (!historicalAir.airHourly) {
             Console.error("YesterdayAirQuality", `Failed to get HistoricalAir(${locationInfo.id})`);
             return failedAirQuality;
