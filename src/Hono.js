@@ -76,13 +76,20 @@ function parseQueryArguments(query = {}) {
 }
 
 async function handleWeatherRequest(c, queryArguments = {}) {
+    let executionCtx;
+    try {
+        executionCtx = c.executionCtx;
+    } catch {
+        // Vercel Edge or testing environment might not have executionCtx
+    }
+
     const store = {
-        executionCtx: c.executionCtx,
+        executionCtx,
         Settings: null,
     };
     return requestContext.run(store, async () => {
-        if (c.executionCtx) {
-            globalThis.ctx = c.executionCtx;
+        if (executionCtx) {
+            globalThis.ctx = executionCtx;
         }
         // 使用 HonoWorkerAdapter 构建标准的内部统一请求对象 $request
         const $request = await HonoWorkerAdapter.buildRequest(c.req);
