@@ -32,9 +32,9 @@ app.get("/", async c => {
     return c.body(htmlContent);
 });
 
-// 配置下载路由，将占位域名替换为当前部署的域名
-app.get("/conf/:filename", async c => {
-    const filenameParam = (c.req.param("filename") || "").toLowerCase();
+// 配置下载通用处理逻辑
+async function handleConfigDownload(c, filename, configParam) {
+    const filenameParam = (filename || "").toLowerCase();
     const configContent = configs[filenameParam];
 
     if (!configContent) {
@@ -45,8 +45,6 @@ app.get("/conf/:filename", async c => {
     const host = c.req.header("host");
     const cstDateString = getCSTDateString();
 
-    // 检查是否有配置参数
-    const configParam = c.req.query("config");
     let targetHost = host;
     if (configParam) {
         targetHost = `${host}/p/${configParam}`;
@@ -61,6 +59,16 @@ app.get("/conf/:filename", async c => {
     c.header("Content-Type", "text/plain; charset=utf-8");
     c.header("Content-Disposition", `attachment; filename="${filenameParam}"`);
     return c.body(content);
+}
+
+// 配置下载路由，将占位域名替换为当前部署的域名（兼容旧参数形式）
+app.get("/conf/:filename", async c => {
+    return handleConfigDownload(c, c.req.param("filename"), c.req.query("config"));
+});
+
+// 新增配置下载路由，支持将 base64 直接放在 URL 路径中
+app.get("/conf/:configBase64/:filename", async c => {
+    return handleConfigDownload(c, c.req.param("filename"), c.req.param("configBase64"));
 });
 
 function parseQueryArguments(query = {}) {

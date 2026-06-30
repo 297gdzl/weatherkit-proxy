@@ -1475,7 +1475,6 @@ export function renderIndex(host, protocol) {
         // 动态生成并挂载卡片 HTML
         function renderCards() {
             const base64 = getBase64Config();
-            const configQuery = base64 ? "?config=" + base64 : "";
 
             const gridHtml = rawItems.map((item, index) => {
                 const isActive = index === selectedClientIndex ? "active" : "";
@@ -1486,9 +1485,11 @@ export function renderIndex(host, protocol) {
             }).join("");
 
             const item = rawItems[selectedClientIndex];
-            const downloadUrl = baseUrl + '/conf/' + item.filename + configQuery;
+            const downloadUrl = base64 
+                ? baseUrl + '/conf/' + base64 + '/' + item.filename 
+                : baseUrl + '/conf/' + item.filename;
             const importUrl = item.scheme ? item.scheme + encodeURIComponent(downloadUrl) : "";
-                        const importBtn = importUrl 
+            const importBtn = importUrl 
                 ? '<a href="' + importUrl + '" class="btn btn-primary">一键导入</a>' 
                 : '<button class="btn btn-disabled" disabled>手动导入</button>';
 
