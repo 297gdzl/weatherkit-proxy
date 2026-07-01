@@ -1,117 +1,53 @@
-export class Lodash {
-    static escape(string) {
-        const map = {
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            '"': "&quot;",
-            "'": "&#39;",
-        };
-        return string.replace(/[&<>"']/g, m => map[m]);
-    }
+// 按点路径（如 "a.b.c" 或 ["a","b","c"]）拆分为数组
+function toPath(value) {
+    if (Array.isArray(value)) return value;
+    return value.replace(/\[(\d+)\]/g, ".$1").split(".").filter(Boolean);
+}
 
-    static get(object = {}, path = "", defaultValue = undefined) {
-        if (!Array.isArray(path)) path = Lodash.toPath(path);
-
-        const result = path.reduce((previousValue, currentValue) => {
-            return Object(previousValue)[currentValue];
-        }, object);
-        return result === undefined ? defaultValue : result;
-    }
-
-    static merge(object, ...sources) {
-        if (object === null || object === undefined) return object;
-
-        for (const source of sources) {
-            if (source === null || source === undefined) continue;
-
-            for (const key of Object.keys(source)) {
-                const sourceValue = source[key];
-                const targetValue = object[key];
-
-                switch (true) {
-                    case Lodash.#isPlainObject(sourceValue) && Lodash.#isPlainObject(targetValue):
-                        object[key] = Lodash.merge(targetValue, sourceValue);
-                        break;
-                    case sourceValue instanceof Map && targetValue instanceof Map:
-                        if (sourceValue.size > 0) {
-                            for (const [k, v] of sourceValue) {
-                                targetValue.set(k, v);
-                            }
-                        }
-                        break;
-                    case sourceValue instanceof Set && targetValue instanceof Set:
-                        if (sourceValue.size > 0) {
-                            for (const v of sourceValue) {
-                                targetValue.add(v);
-                            }
-                        }
-                        break;
-                    case Array.isArray(sourceValue) && sourceValue.length > 0:
-                        object[key] = [...sourceValue];
-                        break;
-                    case sourceValue !== undefined:
-                        object[key] = sourceValue;
-                        break;
-                }
+// 深度合并多个对象到 target（数组做浅拷贝，避免共享引用）
+function merge(target, ...sources) {
+    if (target === null || target === undefined) return target;
+    for (const source of sources) {
+        if (source === null || source === undefined) continue;
+        for (const key of Object.keys(source)) {
+            const src = source[key];
+            const dst = target[key];
+            if (isPlainObject(src) && isPlainObject(dst)) {
+                target[key] = merge(dst, src);
+            } else if (Array.isArray(src)) {
+                // 数组做浅拷贝，避免与 source 共享引用
+                target[key] = src.length > 0 ? [...src] : (dst !== undefined ? dst : []);
+            } else if (src !== undefined) {
+                target[key] = src;
             }
         }
-
-        return object;
     }
-
-    static #isPlainObject(value) {
-        if (value === null || typeof value !== "object") return false;
-        const proto = Object.getPrototypeOf(value);
-        return proto === null || proto === Object.prototype;
-    }
-
-    static omit(object = {}, paths = []) {
-        if (!Array.isArray(paths)) paths = [paths.toString()];
-        paths.forEach(path => Lodash.unset(object, path));
-        return object;
-    }
-
-    static pick(object = {}, paths = []) {
-        if (!Array.isArray(paths)) paths = [paths.toString()];
-        const filteredEntries = Object.entries(object).filter(([key, _value]) => paths.includes(key));
-        return Object.fromEntries(filteredEntries);
-    }
-
-    static set(object, path, value) {
-        if (!Array.isArray(path)) path = Lodash.toPath(path);
-        path.slice(0, -1).reduce((previousValue, currentValue, currentIndex) => (Object(previousValue[currentValue]) === previousValue[currentValue] ? previousValue[currentValue] : (previousValue[currentValue] = /^\d+$/.test(path[currentIndex + 1]) ? [] : {})), object)[path[path.length - 1]] = value;
-        return object;
-    }
-
-    static toPath(value) {
-        return value
-            .replace(/\[(\d+)\]/g, ".$1")
-            .split(".")
-            .filter(Boolean);
-    }
-
-    static unescape(string) {
-        const map = {
-            "&amp;": "&",
-            "&lt;": "<",
-            "&gt;": ">",
-            "&quot;": '"',
-            "&#39;": "'",
-        };
-        return string.replace(/&amp;|&lt;|&gt;|&quot;|&#39;/g, m => map[m]);
-    }
-
-    static unset(object = {}, path = "") {
-        if (!Array.isArray(path)) path = Lodash.toPath(path);
-        const result = path.reduce((previousValue, currentValue, currentIndex) => {
-            if (currentIndex === path.length - 1) {
-                delete previousValue[currentValue];
-                return true;
-            }
-
-            return Object(previousValue)[currentValue];
-        }, object);
-        return result;
-    }
+    return target;
 }
+
+function isPlainObject(value) {
+    if (value === null || typeof value !== "object") return false;
+    const proto = Object.getPrototypeOf(value);
+    return proto === null || proto === Object.prototype;
+}
+
+// 按点路径读取对象属性
+function get(object, path, defaultValue) {
+    const keys = toPath(path);
+    const result = keys.reduce((acc, key) => Object(acc)[key], object);
+    return result === undefined ? defaultValue : result;
+}
+
+// 按点路径写入对象属性
+function set(object, path, value) {
+    const keys = toPath(path);
+    keys.slice(0, -1).reduce((acc, key, i) => {
+        if (Object(acc[key]) !== acc[key]) {
+            acc[key] = /^\d+$/.test(keys[i + 1]) ? [] : {};
+        }
+        return acc[key];
+    }, object)[keys[keys.length - 1]] = value;
+    return object;
+}
+
+export const Lodash = { merge, get, set };
