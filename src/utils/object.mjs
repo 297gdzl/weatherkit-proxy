@@ -18,8 +18,8 @@ export function merge(target, ...sources) {
         for (const key of Object.keys(source)) {
             const src = source[key];
             const dst = target[key];
-            if (isPlainObject(src) && isPlainObject(dst)) {
-                target[key] = merge(dst, src);
+            if (isPlainObject(src)) {
+                target[key] = merge(isPlainObject(dst) ? dst : {}, src);
             } else if (Array.isArray(src)) {
                 target[key] = src.length > 0 ? [...src] : (dst !== undefined ? dst : []);
             } else if (src !== undefined) {
