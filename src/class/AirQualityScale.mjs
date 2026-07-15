@@ -474,7 +474,8 @@ const UBA = {
             },
         },
         {
-            range: [4, 4],
+            // 末档容纳超标值（与计算分类 [4, Infinity] 对齐；#buildGenericScale 会把 Infinity 归一为 9999）。
+            range: [4, Number.POSITIVE_INFINITY],
             glyph: "aqi.high",
             colors: ["#F44336"],
             categoryName: {
