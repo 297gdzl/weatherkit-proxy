@@ -341,7 +341,7 @@ export function renderIndex(host, protocol) {
 
         .client-grid {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(6, 1fr);
             gap: 0.75rem;
             width: 100%;
             margin-bottom: 0px;
@@ -1050,8 +1050,8 @@ export function renderIndex(host, protocol) {
         // 放入 query 会被 URLSearchParams 把 "+" 解码成空格，因此改用 base64url。
         function encodeBase64Url(str) {
             return btoa(unescape(encodeURIComponent(str)))
-                .replace(/\+/g, "-")
-                .replace(/\//g, "_")
+                .replace(/\\+/g, "-")
+                .replace(/\\//g, "_")
                 .replace(/=+$/, "");
         }
 
