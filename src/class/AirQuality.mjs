@@ -564,8 +564,13 @@ export default class AirQuality {
         const primaryPollutants = indexesWithCategory.filter(({ categoryIndex }) => categoryIndex === maxCategoryIndex);
 
         if (primaryPollutants.length > 1) {
-            Console.warn("PrimaryPollutant", `检测到多个同级别的污染物，maxCategoryIndex：${maxCategoryIndex}`);
-            primaryPollutants.map(({ pollutantType, index }) => Console.warn("GetPrimaryPollutants", `${pollutantType}：${index}`));
+            // 仅当并列发生在 significantIndex（轻度污染）及以上时，主污染物的取舍才真正影响展示：
+            // 更低档位在国标下随后会被置为 NOT_AVAILABLE（见 Pollutants2AQI 的 isNotAvailable 分支），
+            // 主污染物选择本就无意义，此时降为 debug 以避免空气优良时刷屏。
+            const isSignificant = maxCategoryIndex >= (categories?.significantIndex ?? 0);
+            const log = isSignificant ? Console.warn : Console.debug;
+            log("PrimaryPollutant", `检测到多个同级别的污染物，maxCategoryIndex：${maxCategoryIndex}`);
+            primaryPollutants.map(({ pollutantType, index }) => log("GetPrimaryPollutants", `${pollutantType}：${index}`));
         }
 
         const primaryPollutant = primaryPollutants[0];
