@@ -219,10 +219,16 @@ export default class AirQuality {
             default: {
                 // PollutantsToUBA
                 Console.debug("☑️ PollutantsToUBA");
-                // UBA 的 LQI 是 0-4 小数分值，scale 分类区间也是小数（[0,0.99]/[1,1.99]…），但 FlatBuffer 的
-                // index 字段是 Int16 只能存整数。用 floor 取整（而非 round 或覆盖成 categoryIndex），使整数 index
-                // 落在与 categoryIndex 相同的分类区间，客户端才能正确渲染。
-                airQuality = AirQuality.#PollutantsToAirQuality(airQuality.pollutants, scale, { stpConversionFactors, allowOverRange: true, floor: true });
+                // UBA 的 LQI 是 0-4 的小数分值，但 FlatBuffer 的 index 字段是 Int16 只能存整数，
+                // 且 iOS 要求 index 与 categoryIndex 一致才能渲染卡片。与上游 NSRingo/WeatherKit
+                // 一致：先按通用算法算出 categoryIndex，再令整数 index = categoryIndex（1-5），
+                // 二者恒等，避免 index/categoryIndex 错位导致客户端隐藏 UBA 卡片。
+                // （此前用 floor(primaryPollutant.index) 会得到 index=3 而 categoryIndex=4，二者错位。）
+                airQuality = AirQuality.#PollutantsToAirQuality(airQuality.pollutants, scale, { stpConversionFactors, allowOverRange: true });
+                airQuality = {
+                    ...airQuality,
+                    index: airQuality.categoryIndex,
+                };
                 Console.debug("✅ PollutantsToUBA");
                 break;
             }
@@ -622,7 +628,6 @@ export default class AirQuality {
         Console.debug("☑️ PollutantsToAirQuality");
         const stpConversionFactors = options?.stpConversionFactors;
         const allowOverRange = options?.allowOverRange ?? true;
-        const floor = options?.floor ?? false;
 
         if (!Array.isArray(pollutants) || pollutants.length === 0) {
             Console.debug("pollutants:", pollutants);
@@ -640,10 +645,7 @@ export default class AirQuality {
 
         const primaryPollutant = AirQuality.PrimaryPollutant(newPollutants, scale.categories);
         const maxIndex = scale?.weatherKitScale?.maxIndex;
-        // floor===true（UBA 的 LQI 为 0-4 小数分值，且 FlatBuffer 的 index 字段是 Int16 只能存整数）：
-        // 向下取整 primaryPollutant.index，使整数 index 落在与 categoryIndex 相同的分类区间
-        // （floor(1.582)=1 ∈ [1,1.99]=cat2 = categoryIndex 2），避免客户端因 index 与 categoryIndex 不一致而无法渲染。
-        const index = floor ? Math.floor(primaryPollutant.index) : allowOverRange || !Number.isFinite(maxIndex) ? Math.round(primaryPollutant.index) : Math.min(Math.round(primaryPollutant.index), maxIndex);
+        const index = allowOverRange || !Number.isFinite(maxIndex) ? Math.round(primaryPollutant.index) : Math.min(Math.round(primaryPollutant.index), maxIndex);
         Console.debug("✅ PollutantsToAirQuality");
         return {
             index,
